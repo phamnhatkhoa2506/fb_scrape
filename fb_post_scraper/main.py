@@ -1,44 +1,44 @@
 import traceback
-from typing import Any
-
+from flask import Flask, request, jsonify
 from utils import (
     convert_urls,
     scrape_posts_from_urls,
     upload_json_to_gcs,
 )
 
+app = Flask(__name__)
 
-def crawl_facebook_posts(request: Any) -> Any:
+@app.route("/", methods=["POST"])
+def crawl_facebook_posts():
     """
-        Cloud Function: Crawl facebook posts
+        Cloud Run HTTP entry point to crawl Facebook posts.
     """
 
     try:
-        # Get urls
         request_json = request.get_json(silent=True)
 
         if not request_json or "urls" not in request_json:
-            return "Key 'urls' not in the request body", 400
+            return jsonify(error="Key 'urls' not in the request body"), 400
 
         urls = request_json["urls"]
         if not isinstance(urls, list) or not all(isinstance(u, str) for u in urls):
-            return "'urls' must be the list of string", 400
+            return jsonify(error="'urls' must be a list of strings"), 400
 
         try:
             batch_size = int(request_json.get("batch_size", 2))
         except ValueError:
-            return "'batch_size' must be an integer", 400
+            return jsonify(error="'batch_size' must be an integer"), 400
 
         print(f"Starting to scrape {len(urls)} user, batch size: {batch_size}")
 
         urls = convert_urls(urls) # Converst urls to apify form
         data = scrape_posts_from_urls(urls, batch_size) # Run scraping
-        gcs_path = upload_json_to_gcs("influencer-profile", data) # Upload to gs
+        gcs_path = upload_json_to_gcs("influencer-post", data) # Upload to gs
 
         msg = f"Finished. Upload JSON to: {gcs_path}"
         print(msg)
         
-        return msg, 200
+        return jsonify(message=msg), 200
 
     except Exception as e:
         err_msg = f"Error: {str(e)}"
